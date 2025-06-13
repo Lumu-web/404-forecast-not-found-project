@@ -1,0 +1,31 @@
+/* Make sure the dashboard layout adapts to screen size */
+.dashboard-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    padding: 2rem;
+}
+
+@media (min-width: 768px) {
+    .dashboard-container {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: stretch;
+    }
+}
+
+/* Chart wrapper with responsive sizing */
+.chart-card {
+    flex: 1;
+    background-color: #ffffff;
+    padding: 1rem;
+    border-radius: 1rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Ensure canvases are responsive */
+.chart-card canvas {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 400px;
+}

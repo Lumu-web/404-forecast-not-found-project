@@ -1,0 +1,1 @@
+<canvas id="forecastChart"></canvas>

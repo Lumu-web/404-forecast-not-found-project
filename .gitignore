@@ -1,0 +1,25 @@
+# Node and Composer dependencies
+/node_modules/
+/vendor/
+/404-forecast-frontend-app/vendor/
+/404-forecast-not-found-api-app/vendor/
+
+/.env
+/404-forecast-frontend-app/.env
+/404-forecast-not-found-api-app/.env
+
+# Laravel specific
+/storage/*
+!/storage/.gitignore
+/public/storage
+/.idea
+Homestead.yaml
+Homestead.json
+
+# Docker stuff
+docker/mysql
+docker/nginx/*.log
+
+# System files
+.DS_Store
+*.log
