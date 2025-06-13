@@ -6,23 +6,24 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- *
+ * Class City
  *
  * @property int $id
- * @property string $city
+ * @property string $name
+ * @property string|null $province
  * @property string $country
- * @property string $latitude
- * @property string $longitude
+ * @property float $lat
+ * @property float $lon
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
- * @mixin \Eloquent
  */
-class Location extends Model
+class City extends Model
 {
     protected $fillable = [
-        'city',
+        'name',
         'country',
-        'latitude',
-        'longitude',
+        'province',
+        'lat',
+        'lon',
     ];
 }

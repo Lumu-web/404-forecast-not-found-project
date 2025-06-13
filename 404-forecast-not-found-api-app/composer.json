@@ -7,6 +7,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "halaxa/json-machine": "^1.2",
         "illuminate/translation": "*",
         "laravel/framework": "^12.0",
         "laravel/passport": "^13.0",
