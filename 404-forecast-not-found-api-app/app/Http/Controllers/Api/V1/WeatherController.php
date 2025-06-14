@@ -12,6 +12,7 @@ use App\Models\City;
 use App\Models\WeatherProvider;
 use App\Services\WeatherProviderFactory;
 use App\Services\WeatherProviderInterface;
+use Http\Discovery\Exception\NotFoundException;
 use Illuminate\Http\JsonResponse;
 
 class WeatherController extends Controller
@@ -20,7 +21,7 @@ class WeatherController extends Controller
 
     public function __construct(WeatherProviderFactory $factory)
     {
-        $provider = WeatherProvider::active()->firstOrFail();
+        $provider             = WeatherProvider::active()->firstOrFail();
         $this->weatherService = $factory->make($provider);
     }
 
@@ -67,14 +68,56 @@ class WeatherController extends Controller
         return ForecastResource::collection($response['list'])->response();
     }
 
+    /**
+     * Autocomplete on city name.
+     */
     public function getAutocompleteCity(CityAutocompleteRequest $request): JsonResponse
     {
         $cities = $this->weatherService->fetchAutoCompleteCityList(
             $request->input('city')
         );
+
         return response()->json($cities);
     }
 
+    /**
+     * Guest overview: uses default lat/lon/city/country.
+     */
+    public function getGuestWeatherOverview(): JsonResponse
+    {
+
+        // pull in our defaults
+        ['lat'     => $lat,
+            'lon'     => $lon,
+            'city'    => $city,
+        ] = $this->weatherService->getDefaults();
+
+        [$cityId, $lat, $lon] = $this->resolveLocation(
+            null,
+            $city,
+            '',
+            ''
+        );
+
+        try {
+            $overview = $this->weatherService->fetchWeatherOverview(
+                $lat,
+                $lon,
+                $cityId
+            );
+
+            return response()->json($overview);
+        } catch (\Exception $e) {
+            return response()->json(
+                ['error' => $e->getMessage()],
+                JsonResponse::HTTP_INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    /**
+     * Authenticated overview: lat/lon/city/country from request or defaults.
+     */
     public function getWeatherOverview(WeatherOverviewRequest $request): JsonResponse
     {
         [$cityId, $lat, $lon] = $this->resolveLocation(
@@ -84,12 +127,11 @@ class WeatherController extends Controller
             $request->input('lon')
         );
 
-        $defaults = $this->weatherService->getDefaults();
         $overview = $this->weatherService->fetchWeatherOverview(
-            $lat ?? $defaults['lat'],
-            $lon ?? $defaults['lon'],
-            $request->input('city', $defaults['city']),
-            $request->input('country', $defaults['country'])
+            $lat,
+            $lon,
+            $request->input('city'),
+            $cityId
         );
 
         return response()->json($overview);
@@ -98,28 +140,55 @@ class WeatherController extends Controller
     /**
      * Resolve input to a valid City and coordinates.
      *
-     * @param int|null        $cityId
-     * @param string|null     $cityName
-     * @param float|string|null $lat
-     * @param float|string|null $lon
+     * @param  int|null             $cityId
+     * @param  string|null          $cityName
+     * @param  float|string|null    $lat
+     * @param  float|string|null    $lon
      * @return array [city_id, lat, lon]
      */
-    protected function resolveLocation(?int $cityId, ?string $cityName, float|string|null $lat, float|string|null $lon): array
-    {
-        // Cast latitude/longitude to float if provided
-        $lat = $lat !== null ? (float)$lat : null;
-        $lon = $lon !== null ? (float)$lon : null;
 
+    protected function resolveLocation(
+        ?int              $cityId,
+        ?string           $cityName,
+        float|string|null $lat,
+        float|string|null $lon
+    ): array {
+        // Cast + round to 6 decimals for DECIMAL(10,6)
+        $lat = $lat !== null ? round((float) $lat, 6) : null;
+        $lon = $lon !== null ? round((float) $lon, 6) : null;
+        // 1) Lookup by city_id
         if ($cityId) {
-            $city = City::findOrFail($cityId);
-        } elseif ($cityName) {
-            $city = City::where('name', $cityName)->firstOrFail();
-        } elseif ($lat !== null && $lon !== null) {
+            try {
+                $city = City::findOrFail($cityId);
+            } catch (NotFoundException $e) {
+                abort(404, "City with ID {$cityId} not found.");
+            }
+        }
+        // 2) Lookup by cityName
+        elseif ($cityName) {
+            try {
+                $city = City::where('name', $cityName)->firstOrFail();
+            } catch (NotFoundException $e) {
+                abort(404, "City named \"{$cityName}\" not found.");
+            }
+        }
+        // 3) Lookup by coords (exact, then nearest, then create)
+        elseif ($lat !== null && $lon !== null) {
             $city = City::where('lat', $lat)
                 ->where('lon', $lon)
                 ->first();
 
             if (! $city) {
+                // nearest neighbor
+                $city = City::orderByRaw(
+                    '(ABS(lat - ?) + ABS(lon - ?)) ASC',
+                    [$lat, $lon]
+                )
+                    ->first();
+            }
+
+            if (! $city) {
+                // no cities at all? create placeholder
                 $city = City::create([
                     'lat'     => $lat,
                     'lon'     => $lon,
@@ -127,10 +196,18 @@ class WeatherController extends Controller
                     'country' => '',
                 ]);
             }
-        } else {
+        }
+        // 4) none provided
+        else {
             abort(400, 'Must provide city_id, city name, or lat and lon.');
         }
 
-        return [$city->id, $city->lat, $city->lon];
+        return [
+            $city->id,
+            (float) $city->lat,
+            (float) $city->lon,
+        ];
     }
+
+
 }

@@ -1,5 +1,10 @@
 import '../namespace';
+
 import Chart from 'chart.js/auto';
+import 'chartjs-adapter-date-fns';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
+
+Chart.register(ChartDataLabels);
 
 forecast.namespace('forecast.controllers');
 
@@ -8,22 +13,25 @@ forecast.controllers.weather = (function () {
         customBottomLabelsPlugin = {
             id: 'customBottomLabels',
             afterDraw(chart, args, options) {
-                const {ctx, chartArea: {top, bottom, left, width}} = chart;
+                const {
+                    ctx,
+                    chartArea: { top, bottom, left, width }
+                } = chart;
                 ctx.save();
                 ctx.font = '14px sans-serif';
                 ctx.fillStyle = 'black';
                 ctx.textAlign = 'center';
 
-                const tempMin = options.tempMin ?? 'N/A';
-                const tempMax = options.tempMax ?? 'N/A';
+                const tempMin     = options.tempMin     ?? 'N/A';
+                const tempMax     = options.tempMax     ?? 'N/A';
                 const weatherDate = options.weatherDate ?? 'N/A';
 
-                const xCenter = left + width / 2;
-                const yPosition = bottom + 30;
-                const yPositionTop = top + 60;
+                const xCenter       = left + width / 2;
+                const yPositionBot  = bottom + 30;
+                const yPositionTop  = top + 60;
 
-                ctx.fillText(`Min Temp: ${tempMin}°C`, xCenter - 80, yPosition);
-                ctx.fillText(`Max Temp: ${tempMax}°C`, xCenter + 80, yPosition);
+                ctx.fillText(`Min Temp: ${tempMin}°C`, xCenter - 80, yPositionBot);
+                ctx.fillText(`Max Temp: ${tempMax}°C`, xCenter + 80, yPositionBot);
                 ctx.fillText(`Update: ${weatherDate}`, xCenter, yPositionTop);
 
                 ctx.restore();
@@ -31,9 +39,9 @@ forecast.controllers.weather = (function () {
         };
 
         constructor(currentCtx, forecastCtx) {
-            this.currentCtx = currentCtx;
+            this.currentCtx  = currentCtx;
             this.forecastCtx = forecastCtx;
-            this.currentChart = null;
+            this.currentChart  = null;
             this.forecastChart = null;
         }
 
@@ -42,52 +50,99 @@ forecast.controllers.weather = (function () {
                 this.initCurrentChart(window.weatherResponse);
             }
             if (this.forecastCtx && window.forecastResponse) {
-                this.initForecastChart(window.forecastResponse);
+                // this.initForecastChart(window.forecastResponse);
             }
         }
 
-        initCurrentChart(data) {
-            const tempMin = this.temperatureToCelsius(data.main.temp_min);
-            const tempMax = this.temperatureToCelsius(data.main.temp_max);
-            const weatherDate = data.dt;
+        initCurrentChart(raw) {
+            const payload = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            const items   = Array.isArray(payload.list) ? payload.list : [payload];
 
-            this.currentChart = new Chart(this.currentCtx, {
-                type: "radar",
+            // normalize fields
+            const snaps = items.map(d => ({
+                label: d.dt
+                    ? new Date(d.dt * 1000).toLocaleString()
+                    : (d.captured_at ?? ''),
+                temp:   Math.round(((d.temperature ?? d.main.temp)       - 273.15)),
+                feels:  Math.round(((d.feels_like  ?? d.main.feels_like) - 273.15)),
+                humid:  +(d.humidity ?? d.main.humidity),
+                pres:   +(d.pressure ?? d.main.pressure),
+            }));
+
+            const labels     = snaps.map(s => s.label);
+            const tempsC     = snaps.map(s => s.temp);
+            const feelsC     = snaps.map(s => s.feels);
+            const humidities = snaps.map(s => s.humid);
+            const pressures  = snaps.map(s => s.pres);
+
+            // destroy old chart
+            if (this.currentChart) {
+                this.currentChart.destroy();
+                this.currentChart = null;
+            }
+
+            const ctx = this.currentCtx.getContext('2d');
+            this.currentChart = new Chart(ctx, {
+                type: 'bar',
                 data: {
-                    labels: ["Temperature", "Feels Like", "Humidity", "Wind Speed"],
-                    datasets: [{
-                        label: "Current Weather: " + data.name,
-                        data: [
-                            this.temperatureToCelsius(data.main.temp),
-                            this.temperatureToCelsius(data.main.feels_like),
-                            data.main.humidity,
-                            data.wind.speed
-                        ],
-                        fill: true,
-                        backgroundColor: "#ff6361",
-                        borderColor: "#003f5c",
-                        pointBackgroundColor: "#003f5c",
-                    }]
+                    labels,
+                    datasets: [
+                        {
+                            label: '🌡 Temp (°C)',
+                            data: tempsC,
+                            backgroundColor: '#4e79a7',
+                        },
+                        {
+                            label: '🤗 Feels Like (°C)',
+                            data: feelsC,
+                            backgroundColor: '#f28e2b',
+                        },
+                        {
+                            label: '💧 Humidity (%)',
+                            data: humidities,
+                            backgroundColor: '#e15759',
+                        },
+                        {
+                            label: '🔴 Pressure (hPa)',
+                            data: pressures,
+                            backgroundColor: '#76b7b2',
+                        }
+                    ]
                 },
                 options: {
-                    layout: {
-                        padding: {
-                            bottom: 50
-                        }
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 800,
+                        easing: 'easeOutQuart'
                     },
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Weather Data'
+                            text: `Current Weather: ${payload.name}`,
+                            font: { size: 18 }
                         },
-                        customBottomLabels: {
-                            tempMin,
-                            tempMax,
-                            weatherDate,
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'right',
+                            color: '#000',
+                            formatter: v => v,
+                            font: { weight: 'bold' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Value' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Metric' }
                         }
                     }
                 },
-                plugins: [this.customBottomLabelsPlugin]
+                // include custom bottom labels plugin for this chart
+                plugins: [ this.customBottomLabelsPlugin ]
             });
         }
 
@@ -108,45 +163,36 @@ forecast.controllers.weather = (function () {
                 options: {
                     responsive: true,
                     plugins: {
-                        title: {
-                            display: true,
-                            text: '5-Day Temperature Forecast'
-                        }
+                        title: { display: true, text: '5-Day Temperature Forecast' }
                     },
                     scales: {
-                        x: {
-                            ticks: {
-                                maxTicksLimit: 10,
-                                autoSkip: true
-                            }
-                        },
-                        y: {
-                            beginAtZero: false
-                        }
+                        x: { ticks: { maxTicksLimit: 10, autoSkip: true } },
+                        y: { beginAtZero: false }
                     }
                 }
             });
         }
 
-        updateCurrentChart(data) {
+        updateCurrentChart(snapshots) {
             if (!this.currentChart) return;
-            this.currentChart.data.datasets[0].label = data.name;
-            this.currentChart.data.datasets[0].data = [
-                this.temperatureToCelsius(data.main.temp),
-                this.temperatureToCelsius(data.main.feels_like),
-                data.main.humidity,
-                data.wind.speed
-            ];
-            this.currentChart.options.plugins.customBottomLabels.tempMin = this.temperatureToCelsius(data.main.temp_min);
-            this.currentChart.options.plugins.customBottomLabels.tempMax = this.temperatureToCelsius(data.main.temp_max);
-            this.currentChart.options.plugins.customBottomLabels.weatherDate = data.dt;
+            const labels     = snapshots.map(s => s.captured_at);
+            const tempsC     = snapshots.map(s => Math.round(s.temperature - 273.15));
+            const feelsC     = snapshots.map(s => Math.round(s.feels_like - 273.15));
+            const humidities = snapshots.map(s => s.humidity);
+            const pressures  = snapshots.map(s => s.pressure);
+
+            this.currentChart.data.labels               = labels;
+            this.currentChart.data.datasets[0].data     = tempsC;
+            this.currentChart.data.datasets[1].data     = feelsC;
+            this.currentChart.data.datasets[2].data     = humidities;
+            this.currentChart.data.datasets[3].data     = pressures;
             this.currentChart.update();
         }
 
         updateForecastChart(data) {
             if (!this.forecastChart) return;
-            this.forecastChart.data.labels = data.list.map(item => item.dt_txt);
-            this.forecastChart.data.datasets[0].data = data.list.map(item => this.temperatureToCelsius(item.main.temp));
+            this.forecastChart.data.labels            = data.list.map(item => item.dt_txt);
+            this.forecastChart.data.datasets[0].data  = data.list.map(item => this.temperatureToCelsius(item.main.temp));
             this.forecastChart.update();
         }
 
@@ -170,22 +216,18 @@ forecast.controllers.weather = (function () {
         let timeoutId;
         return (...args) => {
             clearTimeout(timeoutId);
-            timeoutId = setTimeout(() => {
-                fn.apply(null, args);
-            }, delay);
+            timeoutId = setTimeout(() => { fn.apply(null, args); }, delay);
         };
     }
 
     function setupCityAutocomplete(inputId = 'cityInput', suggestionBoxId = 'citySuggestions', formId = 'citySearchForm') {
-        const input = document.getElementById(inputId);
+        const input         = document.getElementById(inputId);
         const suggestionBox = document.getElementById(suggestionBoxId);
-        const form = document.getElementById(formId);
-
+        const form          = document.getElementById(formId);
         if (!input || !suggestionBox || !form) return;
 
         input.addEventListener('keyup', debounce(function () {
             const query = input.value;
-
             if (query.length < 3) {
                 suggestionBox.innerHTML = '';
                 return;
@@ -193,29 +235,25 @@ forecast.controllers.weather = (function () {
 
             let hiddenLat = document.getElementById('hidden-lat');
             let hiddenLon = document.getElementById('hidden-lon');
-
             if (!hiddenLat) {
                 hiddenLat = document.createElement('input');
                 hiddenLat.type = 'hidden';
-                hiddenLat.id = 'hidden-lat';
+                hiddenLat.id   = 'hidden-lat';
                 hiddenLat.name = 'latitude';
-                form.appendChild(hiddenLat); // You can append to a form instead
+                form.appendChild(hiddenLat);
             }
-
             if (!hiddenLon) {
                 hiddenLon = document.createElement('input');
                 hiddenLon.type = 'hidden';
-                hiddenLon.id = 'hidden-lon';
+                hiddenLon.id   = 'hidden-lon';
                 hiddenLon.name = 'longitude';
-                form.appendChild(hiddenLon); // You can append to a form instead
+                form.appendChild(hiddenLon);
             }
 
             fetch(`${CITY_LOOKUP_URL}?city=${encodeURIComponent(query)}`)
                 .then(res => res.json())
                 .then(data => {
-                    suggestionBox.innerHTML = ''; // clear previous suggestions
-
-                    // Create UL and set ARIA role
+                    suggestionBox.innerHTML = '';
                     const ul = document.createElement('ul');
                     ul.setAttribute('role', 'listbox');
                     ul.classList.add('suggestions-list');
@@ -226,11 +264,10 @@ forecast.controllers.weather = (function () {
                         locationParts.push(city.country);
 
                         const displayText = locationParts.join(', ');
-
                         const li = document.createElement('li');
                         li.textContent = displayText;
                         li.setAttribute('role', 'option');
-                        li.setAttribute('tabindex', '0'); // Allow keyboard focus
+                        li.setAttribute('tabindex', '0');
                         li.classList.add('suggestion');
 
                         li.addEventListener('click', () => {
@@ -256,20 +293,15 @@ forecast.controllers.weather = (function () {
                 });
         }, 300));
 
-        // Form Submission (AJAX)
         form.addEventListener('submit', function (e) {
             e.preventDefault();
 
-            let hiddenLat = document.getElementById('hidden-lat');
-            let hiddenLon = document.getElementById('hidden-lon');
-
+            const hiddenLat = document.getElementById('hidden-lat');
+            const hiddenLon = document.getElementById('hidden-lon');
             if (!hiddenLat || !hiddenLon) return;
 
-            fetch(form.action + '?lat=' + encodeURIComponent(hiddenLat.value) + '&lon=' + encodeURIComponent(hiddenLon.value), {
-
-                headers: {
-                    'Accept': 'application/json'
-                }
+            fetch(`${form.action}?lat=${encodeURIComponent(hiddenLat.value)}&lon=${encodeURIComponent(hiddenLon.value)}`, {
+                headers: { 'Accept': 'application/json' }
             })
                 .then(async res => {
                     if (!res.ok) {
@@ -280,10 +312,9 @@ forecast.controllers.weather = (function () {
                 })
                 .then(data => {
                     if (data.current && data.forecast) {
-                        window.weatherResponse = data.current;
-                        window.forecastResponse = data.forecast;
-
-                        forecast.controllers.weather.updateCurrentChart(data.current);
+                        window.weatherSnapshots    = data.currentSnapshots;
+                        window.forecastResponse    = data.forecast;
+                        forecast.controllers.weather.updateCurrentChart(window.weatherSnapshots);
                         forecast.controllers.weather.updateForecastChart(data.forecast);
                     } else {
                         console.error('Unexpected API format', data);
@@ -291,7 +322,7 @@ forecast.controllers.weather = (function () {
                 })
                 .catch(err => {
                     console.error('City search error:', err);
-                    alert('Could not load weather data for that city.' + err.message);
+                    alert('Could not load weather data for that city: ' + err.message);
                 });
         });
     }
@@ -299,23 +330,20 @@ forecast.controllers.weather = (function () {
     let weatherChartsInstance = null;
 
     function init() {
-        const currentCtx = document.getElementById('currentChart');
+        const currentCtx  = document.getElementById('currentChart');
         const forecastCtx = document.getElementById('forecastChart');
 
-        if (weatherChartsInstance) {
-            weatherChartsInstance.destroy();
-        }
+        if (weatherChartsInstance) weatherChartsInstance.destroy();
 
         weatherChartsInstance = new WeatherCharts(currentCtx, forecastCtx);
         weatherChartsInstance.init();
 
-        // Initialize city autocomplete
         setupCityAutocomplete();
     }
 
     return {
         init,
-        updateCurrentChart: (data) => weatherChartsInstance?.updateCurrentChart(data),
+        updateCurrentChart:  (data) => weatherChartsInstance?.updateCurrentChart(data),
         updateForecastChart: (data) => weatherChartsInstance?.updateForecastChart(data),
         destroy: () => weatherChartsInstance?.destroy()
     };
