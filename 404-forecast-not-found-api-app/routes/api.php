@@ -13,7 +13,6 @@ Route::prefix('v1')->group(function () {
         Route::middleware(['check.daily.openweather.api.usage', 'auth:sanctum'])->group(function () {
             Route::get('/current', [WeatherController::class, 'fetchCurrentWeather']);
             Route::get('/forecast', [WeatherController::class, 'getWeatherForecast']);
-            Route::get('/history', [WeatherController::class, 'getHistoricalWeatherForecast']);
             Route::get('/overview', [WeatherController::class, 'getWeatherOverview']);
         });
 

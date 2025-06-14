@@ -2,66 +2,102 @@
 
 namespace App\Clients;
 
-use Illuminate\Http\Client\Response;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Exception;
+use RuntimeException;
 
 abstract class BaseProviderClient
 {
+    /**
+     * @var string
+     */
     protected string $providerCode;
-    protected int $dailyLimit = 1000;
+    /**
+     * @var int
+     */
+    protected int    $dailyLimit;
+    /**
+     * @var string
+     */
+    protected string $baseUrl;
+    /**
+     * @var string
+     */
+    protected string $apiKey;
 
-    public function setProviderCode(string $providerCode): void
+    /**
+     * @param string $baseUrl
+     * @param string $apiKey
+     * @param int $dailyLimit
+     */
+    public function __construct(string $baseUrl, string $apiKey, int $dailyLimit = 1000)
     {
-        $this->providerCode = $providerCode;
+        $this->baseUrl    = rtrim($baseUrl, '/');
+        $this->apiKey     = $apiKey;
+        $this->dailyLimit = $dailyLimit;
     }
 
-    public function setDailyLimit(int $limit): void
+    /**
+     * @param string $code
+     * @return void
+     */
+    public function setProviderCode(string $code): void
     {
-        $this->dailyLimit = $limit;
+        $this->providerCode = $code;
     }
 
+    /**
+     * @return void
+     */
     protected function trackApiHit(): void
     {
-        $key = "api_hits_{$this->providerCode}_" . now()->toDateString();
+        $key  = "api_hits_{$this->providerCode}_" . now()->toDateString();
         $hits = Cache::increment($key);
-
         if ($hits === 1) {
             Cache::put($key, 1, now()->endOfDay());
         }
-
         if ($hits > $this->dailyLimit) {
-            Log::warning("API rate limit exceeded for provider: {$this->providerCode}");
-            throw new Exception("Rate limit exceeded for provider: {$this->providerCode}");
+            Log::warning("Rate limit exceeded: {$this->providerCode}");
+            throw new RuntimeException('Rate limit exceeded');
         }
     }
 
     /**
-     * @throws Exception
+     * @param string $endpoint
+     * @param array $params
+     * @return array
+     * @throws ConnectionException
      */
-    protected function get(string $endpoint, array $queryParams = []): Response
+    protected function request(string $endpoint, array $params = []): array
     {
-        $response = Http::get("{$this->baseUrl}/{$endpoint}", $queryParams);
-        if ($response->ok()) {
-            $this->trackApiHit();
+        $this->trackApiHit();
+        $response = Http::baseUrl($this->baseUrl)
+            ->acceptJson()
+            ->get($endpoint, array_merge($params, ['appid' => $this->apiKey]));
+        if ($response->failed()) {
+            Log::error('Provider request failed', ['status' => $response->status(), 'body' => $response->body()]);
+            throw new RuntimeException("HTTP {$response->status()} error");
         }
-        return $response;
+        return $response->json();
     }
 
-    public function getAutoCompleteCityList(string $city)
+    /**
+     * @param string $city
+     * @param int $limit
+     * @return array
+     * @throws ConnectionException
+     */
+    public function getAutoCompleteCityList(string $city, int $limit = 5): array
     {
-        $response = Http::get('https://api.openweathermap.org/geo/1.0/direct', [
-            'q'     => $city,
-            'limit' => 5,
-            'appid' => $this->apiKey,
-        ]);
-
+        $endpoint = 'https://api.openweathermap.org/geo/1.0/direct';
+        $params   = ['q' => $city, 'limit' => $limit, 'appid' => $this->apiKey];
+        $response = Http::acceptJson()->get($endpoint, $params);
         if ($response->failed()) {
-            throw new Exception("Failed to fetch weather data: " . $response->body());
+            Log::error('Geocode failed', ['body' => $response->body()]);
+            throw new RuntimeException('Geocoding error');
         }
-
         return $response->json();
     }
 }

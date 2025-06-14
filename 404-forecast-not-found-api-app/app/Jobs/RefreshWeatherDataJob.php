@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Jobs;
 
 use App\Services\OpenWeatherMapService;
@@ -8,28 +9,43 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use RuntimeException;
+
 class RefreshWeatherDataJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    protected string $location;
+    protected string $city;
 
-    public function __construct(string $location)
+    /**
+     * @param string $city  The city name to refresh (e.g. "Cape Town")
+     */
+    public function __construct(string $city)
     {
-        $this->location = $location;
+        $this->city = $city;
     }
 
-    public function handle(OpenWeatherMapService $weatherService)
+    /**
+     * @param  OpenWeatherMapService  $weatherService
+     * @return void
+     * @throws RuntimeException
+     */
+    public function handle(OpenWeatherMapService $weatherService): void
     {
-        $data = $weatherService->fetchWeatherFor($this->location);
+        $matches = $weatherService->fetchAutoCompleteCityList($this->city);
+        if (empty($matches)) {
+            throw new RuntimeException("Could not find coordinates for city: {$this->city}");
+        }
 
-        // Save the relevant data
+        $coords = $matches[0];
+        $lat = $coords['lat'];
+        $lon = $coords['lon'];
+        $payload = $weatherService->fetchCurrentWeather($lat, $lon);
+
         WeatherRecord::create([
-            'location'     => $this->location,
-            'temperature'  => $data['temp'],
-            'humidity'     => $data['humidity'],
-            'pressure'     => $data['pressure'],
-            'fetched_at'   => now(),
+            'city'      => $this->city,
+            'timestamp' => now(),
+            'data'      => $payload,
         ]);
     }
 }

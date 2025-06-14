@@ -1,17 +1,11 @@
-<?php namespace App\Models;
+<?php
 
-// app/Models/WeatherRecord.php
+namespace App\Models;
+
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * 
- *
- * @method static \Illuminate\Database\Eloquent\Builder<static>|WeatherRecord newModelQuery()
- * @method static \Illuminate\Database\Eloquent\Builder<static>|WeatherRecord newQuery()
- * @method static \Illuminate\Database\Eloquent\Builder<static>|WeatherRecord query()
- * @mixin \Eloquent
- */
 class WeatherRecord extends Model
 {
-    protected $fillable = ['city', 'temperature', 'humidity', 'timestamp'];
+    protected $fillable = ['city','timestamp','data'];
+    protected $casts    = ['timestamp' => 'datetime','data' => 'array'];
 }
