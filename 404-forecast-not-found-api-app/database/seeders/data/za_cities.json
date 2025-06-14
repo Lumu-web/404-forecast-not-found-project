@@ -1,0 +1,30 @@
+[
+    {
+        "id": 964137,
+        "name": "Pretoria",
+        "state": "Gauteng",
+        "country": "ZA",
+        "coord": { "lat": -25.7465, "lon": 28.1881 }
+    },
+    {
+        "id": 947747,
+        "name": "Durban",
+        "state": "KwaZulu-Natal",
+        "country": "ZA",
+        "coord": { "lat": -29.8587, "lon": 31.0218 }
+    },
+    {
+        "id": 3369157,
+        "name": "Cape Town",
+        "state": "Western Cape",
+        "country": "ZA",
+        "coord": { "lat": -33.9249, "lon": 18.4241 }
+    },
+    {
+        "id": 993800,
+        "name": "Johannesburg",
+        "state": "Gauteng",
+        "country": "ZA",
+        "coord": { "lat": -26.2041, "lon": 28.0473 }
+    }
+]

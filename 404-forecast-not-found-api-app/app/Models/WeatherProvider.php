@@ -2,22 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Carbon;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/**
- *
- *
- * @property int $id
- * @property string $name
- * @property string|null $description
- * @property string $code
- * @property int $is_active
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
- */
 class WeatherProvider extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'name',
         'description',
@@ -29,14 +22,24 @@ class WeatherProvider extends Model
         'is_active' => 'boolean',
     ];
 
-    public function forecastReadings()
+    /**
+     * Scope a query to only include active providers.
+     *
+     * @param Builder $query
+     * @return Builder
+     */
+    public function scopeActive(Builder $query): Builder
     {
-        return $this->hasMany(ForecastReading::class);
+        return $query->where('is_active', true);
     }
 
-    public function currentReadings()
+    public function forecastReadings(): HasMany
     {
-        return $this->hasMany(CurrentReading::class);
+        return $this->hasMany(WeatherForecast::class);
     }
 
+    public function currentReadings(): HasMany
+    {
+        return $this->hasMany(WeatherSnapshot::class);
+    }
 }

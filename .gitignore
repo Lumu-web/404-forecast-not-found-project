@@ -23,3 +23,4 @@ docker/nginx/*.log
 # System files
 .DS_Store
 *.log
+/404-forecast-not-found-api-app/app/Console/Commands/GenerateModelWithFillable.php

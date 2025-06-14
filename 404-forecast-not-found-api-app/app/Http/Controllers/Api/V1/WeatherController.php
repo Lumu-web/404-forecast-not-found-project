@@ -3,116 +3,134 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\WeatherRequest;
+use App\Http\Requests\CityAutocompleteRequest;
+use App\Http\Requests\WeatherOverviewRequest;
+use App\Http\Resources\CurrentWeatherResource;
+use App\Http\Resources\ForecastResource;
+use App\Models\City;
 use App\Models\WeatherProvider;
 use App\Services\WeatherProviderFactory;
 use App\Services\WeatherProviderInterface;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class WeatherController extends Controller
 {
-    protected WeatherProviderInterface $weatherService;
-    public function __construct(
-        protected WeatherProviderFactory $weatherServiceFactory,
-    ) {
-        $provider = WeatherProvider::where('is_active', 1)->firstOrFail();
-        if (!$provider) {
-            throw new \Exception('No active weather provider found');
-        }
-        $this->weatherService = $weatherServiceFactory->make($provider);
-    }
+    private WeatherProviderInterface $weatherService;
 
-    public function fetchCurrentWeather(Request $request): JsonResponse
+    public function __construct(WeatherProviderFactory $factory)
     {
-        $lat = $request->query('lat');
-        $lon = $request->query('lon');
-        $exclude = $request->query('exclude', '');
-        if (!$lat || !$lon) {
-            return response()->json(['error' => 'Latitude and longitude parameters are required'], 400);
-        }
-
-        try {
-            $currentWeather = $this->weatherService->fetchCurrentWeather((float) $lat, (float) $lon, $exclude);
-            return response()->json($currentWeather);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
+        $provider = WeatherProvider::active()->firstOrFail();
+        $this->weatherService = $factory->make($provider);
     }
 
     /**
-     * @throws \Exception
+     * Fetch current weather by lat/lon, city name, or city_id.
      */
-    public function getWeatherForecast(Request $request): JsonResponse
+    public function fetchCurrentWeather(WeatherRequest $request): JsonResponse
     {
-        $lat = $request->query('lat');
-        $lon = $request->query('lon');
-        if (!$lat || !$lon) {
-            return response()->json(['error' => 'Latitude and longitude parameters are required'], 400);
-        }
+        [$cityId, $lat, $lon] = $this->resolveLocation(
+            $request->input('city_id'),
+            $request->input('city'),
+            $request->input('lat'),
+            $request->input('lon')
+        );
 
-        $forecast = $this->weatherService->fetchWeatherForecast((float) $lat, (float) $lon);
+        $data = $this->weatherService->fetchCurrentWeather(
+            $lat,
+            $lon,
+            $cityId,
+            $request->input('exclude', '')
+        );
 
-        return response()->json($forecast);
-    }
-
-    public function getHistoricalWeatherForecast(Request $request): JsonResponse
-    {
-        $lat = $request->query('lat');
-        $lon = $request->query('lon');
-        $date = $request->query('date');
-        if (!$lat || !$lon || !$date) {
-            return response()->json(['error' => 'Latitude/longitude and dateTime parameters are required'], 400);
-        }
-
-        $lat = round($lat, 2);
-        $lon = round($lon, 2);
-
-        $history = $this->weatherService->fetchHistoricalWeatherForecast($lat, $lon, $date);
-        return response()->json($history);
+        return CurrentWeatherResource::make($data)->response();
     }
 
     /**
-     * @throws \Exception
+     * Fetch weather forecast by lat/lon, city name, or city_id.
      */
-    public function getAutocompleteCity(Request $request): JsonResponse
+    public function getWeatherForecast(WeatherRequest $request): JsonResponse
     {
-        $query = $request->input('city');
-        $cityList = $this->weatherService->fetchAutoCompleteCityList($query);
-        return response()->json($cityList);
+        [$cityId, $lat, $lon] = $this->resolveLocation(
+            $request->input('city_id'),
+            $request->input('city'),
+            $request->input('lat'),
+            $request->input('lon')
+        );
+
+        $response = $this->weatherService->fetchWeatherForecast(
+            $lat,
+            $lon,
+            $cityId
+        );
+
+        return ForecastResource::collection($response['list'])->response();
     }
 
-    public function getWeatherOverview(Request $request): JsonResponse
+    public function getAutocompleteCity(CityAutocompleteRequest $request): JsonResponse
     {
-        $defaults = $this->weatherService->getDefaults();
-
-        $lat = $request->query('lat') !== null ? (float)$request->query('lat') : $defaults['lat'];
-        $lon = $request->query('lon') !== null ? (float)$request->query('lon') : $defaults['lon'];
-        $city = $request->query('city', $defaults['city']);
-        $country = $request->query('country', $defaults['country']);
-
-        try {
-            $overview = $this->weatherService->fetchWeatherOverview($lat, $lon, $city, $country);
-            return response()->json($overview);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
+        $cities = $this->weatherService->fetchAutoCompleteCityList(
+            $request->input('city')
+        );
+        return response()->json($cities);
     }
 
-    public function getGuestWeatherOverview(): JsonResponse
+    public function getWeatherOverview(WeatherOverviewRequest $request): JsonResponse
     {
-        $defaults = $this->weatherService->getDefaults();
-        [
-            'lat' => $lat,
-            'lon' => $lon,
-            'city' => $city,
-            'country' => $country,
-        ] = $defaults;
+        [$cityId, $lat, $lon] = $this->resolveLocation(
+            $request->input('city_id'),
+            $request->input('city'),
+            $request->input('lat'),
+            $request->input('lon')
+        );
 
-        try {
-            $overview = $this->weatherService->fetchWeatherOverview($lat, $lon, $city, $country);
-            return response()->json($overview);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+        $defaults = $this->weatherService->getDefaults();
+        $overview = $this->weatherService->fetchWeatherOverview(
+            $lat ?? $defaults['lat'],
+            $lon ?? $defaults['lon'],
+            $request->input('city', $defaults['city']),
+            $request->input('country', $defaults['country'])
+        );
+
+        return response()->json($overview);
+    }
+
+    /**
+     * Resolve input to a valid City and coordinates.
+     *
+     * @param int|null        $cityId
+     * @param string|null     $cityName
+     * @param float|string|null $lat
+     * @param float|string|null $lon
+     * @return array [city_id, lat, lon]
+     */
+    protected function resolveLocation(?int $cityId, ?string $cityName, float|string|null $lat, float|string|null $lon): array
+    {
+        // Cast latitude/longitude to float if provided
+        $lat = $lat !== null ? (float)$lat : null;
+        $lon = $lon !== null ? (float)$lon : null;
+
+        if ($cityId) {
+            $city = City::findOrFail($cityId);
+        } elseif ($cityName) {
+            $city = City::where('name', $cityName)->firstOrFail();
+        } elseif ($lat !== null && $lon !== null) {
+            $city = City::where('lat', $lat)
+                ->where('lon', $lon)
+                ->first();
+
+            if (! $city) {
+                $city = City::create([
+                    'lat'     => $lat,
+                    'lon'     => $lon,
+                    'name'    => 'Custom',
+                    'country' => '',
+                ]);
+            }
+        } else {
+            abort(400, 'Must provide city_id, city name, or lat and lon.');
         }
+
+        return [$city->id, $city->lat, $city->lon];
     }
 }

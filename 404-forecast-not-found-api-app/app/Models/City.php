@@ -3,27 +3,18 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Carbon;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/**
- * Class City
- *
- * @property int $id
- * @property string $name
- * @property string|null $province
- * @property string $country
- * @property float $lat
- * @property float $lon
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
- */
 class City extends Model
 {
-    protected $fillable = [
-        'name',
-        'country',
-        'province',
-        'lat',
-        'lon',
-    ];
+    protected $fillable = ['name','province','country','lat','lon'];
+
+    public function snapshots(): HasMany
+    { return $this->hasMany(WeatherSnapshot::class); }
+    public function forecasts(): HasMany
+    { return $this->hasMany(WeatherForecast::class); }
+    public function airReadings(): HasMany
+    { return $this->hasMany(AirQualityReading::class); }
+    public function importLogs(): HasMany
+    { return $this->hasMany(WeatherImportLog::class); }
 }

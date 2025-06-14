@@ -3,98 +3,91 @@
 namespace App\Services;
 
 use App\Clients\OpenWeatherMapClient;
-use App\Models\WeatherRecord;
-use Carbon\Carbon;
-use Exception;
-use Illuminate\Database\Eloquent\Collection;
+use App\Models\WeatherImportLog;
+use App\Models\WeatherSnapshot;
+use App\Models\WeatherForecast;
+use RuntimeException;
 
 class OpenWeatherMapService extends WeatherProviderService
 {
-    const PROVIDER_CODE = 'openweathermap';
-    const DEFAULT_LATITUDE = -33.962;
-    const DEFAULT_LONGITUDE = 25.621;
-    const DEFAULT_CITY = 'Gqeberha';
-    const DEFAULT_COUNTRY = 'ZA';
+    public const PROVIDER_CODE     = 'openweathermap';
+    public const DEFAULT_LATITUDE  = -33.962;
+    public const DEFAULT_LONGITUDE = 25.621;
+    public const DEFAULT_CITY      = 'Gqeberha';
+    public const DEFAULT_COUNTRY   = 'ZA';
 
     public function __construct(protected OpenWeatherMapClient $client)
     {
         $this->client->setProviderCode(self::PROVIDER_CODE);
     }
 
-    /**
-     * @throws Exception
-     */
-    public function fetchCurrentWeather(float $lat, float $lon, string $city = '', string $country = '', string $exclude = ''): array
+    public function fetchCurrentWeather(float $lat, float $lon, ?int $cityId = null, string $exclude = ''): array
     {
-        if ($city && $country) {
-            $cacheKey = $this->cacheKeyCurrentWeather($city, $country);
-            return $this->getCachedData($cacheKey, function () use ($lat, $lon, $exclude) {
-                $data = $this->client->getCurrentWeather($lat, $lon, $exclude);
-                $data['dt'] = $this->formatToUseFriendlyDate($data['dt'] ?? null);
-                return $data;
-            });
+        $start = now();
+        try {
+            $data = $this->client->getCurrentWeather($lat, $lon, $exclude);
+        } catch (\Throwable $e) {
+            WeatherImportLog::failure('current', $e->getMessage(), $start);
+            throw new RuntimeException($e->getMessage());
         }
 
-        $data = $this->client->getCurrentWeather($lat, $lon, $exclude);
-        $data['dt'] = $this->formatToUseFriendlyDate($data['dt'] ?? null);
+        WeatherSnapshot::store($data, $start, $cityId);
+        WeatherImportLog::success('current', $start, $cityId);
+
         return $data;
     }
 
-    /**
-     * @throws Exception
-     */
-    public function fetchWeatherForecast(float $lat, float $lon, string $city = '', string $country = ''): array
+    public function fetchWeatherForecast(float $lat, float $lon, ?int $city): array
     {
-        if ($city && $country) {
-            $cacheKey = $this->cacheKeyWeatherForecast($city, $country);
-            return $this->getCachedData($cacheKey, fn() => $this->client->getWeatherForecast($lat, $lon));
+        $start = now();
+        try {
+            $response = $this->client->getWeatherForecast($lat, $lon);
+        } catch (\Throwable $e) {
+            WeatherImportLog::failure('forecast', $e->getMessage(), $start);
+            throw new RuntimeException($e->getMessage());
         }
 
-        return $this->client->getWeatherForecast($lat, $lon);
+        WeatherForecast::storeBatch($response['list'], $start, $city);
+        WeatherImportLog::success('forecast', $start, $city);
+
+        return $response;
     }
 
-    /**
-     * @throws Exception
-     */
-    public function fetchHistoricalWeatherForecast(float $lat, float $lon, string $timestamp): array
+    public function fetchAirQuality(float $lat, float $lon): array
     {
-        return $this->client->getHistoricalWeather($lat, $lon, $timestamp);
+        // If you want to persist AQI, you could do so here:
+        // $start = now();
+        // $data  = $this->client->getAirQuality($lat, $lon);
+        // AirQualityReading::storeFromApi($data, $start);
+        // WeatherImportLog::success('air', $start);
+        // return $data;
+
+        return $this->client->getAirQuality($lat, $lon);
     }
 
-    /**
-     * @throws Exception
-     */
-    public function fetchAutoCompleteCityList(string $city): array
+    public function fetchAutoCompleteCityList(string $query): array
     {
-        $cityList = $this->client->getAutoCompleteCityList($city);
-
-        return array_map(fn($c) => [
-            'name' => $c['name'],
-            'state' => $c['state'] ?? null,
-            'country' => $c['country'],
-            'lat' => $c['lat'],
-            'lon' => $c['lon'],
-        ], $cityList);
+        return $this->client->getAutoCompleteCityList($query);
     }
 
     public function fetchWeatherOverview(
-        float $lat = self::DEFAULT_LATITUDE,
-        float $lon = self::DEFAULT_LONGITUDE,
-        string $city = self::DEFAULT_CITY,
-        string $country = self::DEFAULT_COUNTRY
+        float  $lat,
+        float  $lon,
+        string $city,
+        string $country
     ): array {
         return [
-            'current' => $this->fetchCurrentWeather($lat, $lon, $city, $country),
-            'forecast' => $this->fetchWeatherForecast($lat, $lon, $city, $country),
+            'current'  => $this->fetchCurrentWeather($lat, $lon, ''),
+            'forecast' => $this->fetchWeatherForecast($lat, $lon),
         ];
     }
 
     public function getDefaults(): array
     {
         return [
-            'lat' => self::DEFAULT_LATITUDE,
-            'lon' => self::DEFAULT_LONGITUDE,
-            'city' => self::DEFAULT_CITY,
+            'lat'     => self::DEFAULT_LATITUDE,
+            'lon'     => self::DEFAULT_LONGITUDE,
+            'city'    => self::DEFAULT_CITY,
             'country' => self::DEFAULT_COUNTRY,
         ];
     }
@@ -103,28 +96,4 @@ class OpenWeatherMapService extends WeatherProviderService
     {
         return self::PROVIDER_CODE;
     }
-
-    public function getHistory(array|string $city, int $date): Collection
-    {
-        return WeatherRecord::where('city', $city)
-            ->whereDate('timestamp', $date)
-            ->get();
-    }
-
-    protected function cacheKeyCurrentWeather(string $city, string $country): string
-    {
-        return "current_weather_{$city}_{$country}";
-    }
-
-    protected function cacheKeyWeatherForecast(string $city, string $country): string
-    {
-        return "weather_forecast_{$city}_{$country}";
-    }
-
-    protected function formatToUseFriendlyDate(?int $timestamp): string
-    {
-        return Carbon::createFromTimestamp($timestamp ?? time(), 'Africa/Johannesburg')
-            ->format('M j, Y \a\t H:i');
-    }
 }
-
