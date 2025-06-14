@@ -13,7 +13,7 @@ class OpenWeatherMapService extends WeatherProviderService
     public const PROVIDER_CODE     = 'openweathermap';
     public const DEFAULT_LATITUDE  = -33.962;
     public const DEFAULT_LONGITUDE = 25.621;
-    public const DEFAULT_CITY      = 'Gqeberha';
+    public const DEFAULT_CITY      = 'Port Elizabeth';
     public const DEFAULT_COUNTRY   = 'ZA';
 
     public function __construct(protected OpenWeatherMapClient $client)
@@ -21,64 +21,97 @@ class OpenWeatherMapService extends WeatherProviderService
         $this->client->setProviderCode(self::PROVIDER_CODE);
     }
 
-    public function fetchCurrentWeather(float $lat, float $lon, ?int $cityId = null, string $exclude = ''): array
-    {
-        $start = now();
-        try {
-            $data = $this->client->getCurrentWeather($lat, $lon, $exclude);
-        } catch (\Throwable $e) {
-            WeatherImportLog::failure('current', $e->getMessage(), $start);
-            throw new RuntimeException($e->getMessage());
-        }
+    public function fetchCurrentWeather(
+        float  $lat,
+        float  $lon,
+        ?int   $cityId  = null,
+        string $exclude = ''
+    ): array {
+        return $this->cacheCall(
+            prefix: 'current_weather',
+            params: [
+                'lat'     => $lat,
+                'lon'     => $lon,
+                'exclude' => $exclude,
+                'cityId'  => $cityId,
+            ],
+            callback: function () use ($lat, $lon, $exclude, $cityId) {
+                $start = now();
+                try {
+                    $data = $this->client->getCurrentWeather($lat, $lon, $exclude);
+                } catch (\Throwable $e) {
+                    WeatherImportLog::failure('current', $e->getMessage(), $start);
+                    throw new RuntimeException($e->getMessage());
+                }
 
-        WeatherSnapshot::store($data, $start, $cityId);
-        WeatherImportLog::success('current', $start, $cityId);
+                WeatherSnapshot::store($data, $start, $cityId);
+                WeatherImportLog::success('current', $start, $cityId);
 
-        return $data;
+                return $data;
+            }
+        );
     }
 
-    public function fetchWeatherForecast(float $lat, float $lon, ?int $city): array
-    {
-        $start = now();
-        try {
-            $response = $this->client->getWeatherForecast($lat, $lon);
-        } catch (\Throwable $e) {
-            WeatherImportLog::failure('forecast', $e->getMessage(), $start);
-            throw new RuntimeException($e->getMessage());
-        }
+    public function fetchWeatherForecast(
+        float $lat,
+        float $lon,
+        ?int  $cityId = null
+    ): array {
+        return $this->cacheCall(
+            prefix: 'weather_forecast',
+            params: [
+                'lat'    => $lat,
+                'lon'    => $lon,
+                'cityId' => $cityId,
+            ],
+            callback: function () use ($lat, $lon, $cityId) {
+                $start = now();
+                try {
+                    $response = $this->client->getWeatherForecast($lat, $lon);
+                } catch (\Throwable $e) {
+                    WeatherImportLog::failure('forecast', $e->getMessage(), $start);
+                    throw new RuntimeException($e->getMessage());
+                }
 
-        WeatherForecast::storeBatch($response['list'], $start, $city);
-        WeatherImportLog::success('forecast', $start, $city);
+                WeatherForecast::storeBatch($response['list'], $start, $cityId);
+                WeatherImportLog::success('forecast', $start, $cityId);
 
-        return $response;
+                return $response;
+            },
+            minutes: 30
+        );
     }
 
     public function fetchAirQuality(float $lat, float $lon): array
     {
-        // If you want to persist AQI, you could do so here:
-        // $start = now();
-        // $data  = $this->client->getAirQuality($lat, $lon);
-        // AirQualityReading::storeFromApi($data, $start);
-        // WeatherImportLog::success('air', $start);
-        // return $data;
-
-        return $this->client->getAirQuality($lat, $lon);
+        return $this->cacheCall(
+            prefix: 'air_quality',
+            params: [
+                'lat' => $lat,
+                'lon' => $lon,
+            ],
+            callback: fn() => $this->client->getAirQuality($lat, $lon)
+        );
     }
 
     public function fetchAutoCompleteCityList(string $query): array
     {
-        return $this->client->getAutoCompleteCityList($query);
+        return $this->cacheCall(
+            prefix: 'autocomplete_city',
+            params: ['query' => $query],
+            callback: fn() => $this->client->getAutoCompleteCityList($query),
+            minutes: 0.3
+        );
     }
 
     public function fetchWeatherOverview(
         float  $lat,
         float  $lon,
-        string $city,
-        string $country
+        ?int   $cityId = null
     ): array {
         return [
-            'current'  => $this->fetchCurrentWeather($lat, $lon, ''),
-            'forecast' => $this->fetchWeatherForecast($lat, $lon),
+            'current'  => $this->fetchCurrentWeather($lat, $lon, $cityId),
+            'forecast' => $this->fetchWeatherForecast($lat, $lon, $cityId),
         ];
     }
 
