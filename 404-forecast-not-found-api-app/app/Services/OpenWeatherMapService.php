@@ -104,15 +104,12 @@ class OpenWeatherMapService extends WeatherProviderService
         );
     }
 
-    public function fetchWeatherOverview(
+    public function fetchGuestWeatherOverview(
         float  $lat,
         float  $lon,
         ?int   $cityId = null
     ): array {
-        return [
-            'current'  => $this->fetchCurrentWeather($lat, $lon, $cityId),
-            'forecast' => $this->fetchWeatherForecast($lat, $lon, $cityId),
-        ];
+        return $this->fetchCurrentWeather($lat, $lon, $cityId);
     }
 
     public function getDefaults(): array

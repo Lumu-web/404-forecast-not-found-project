@@ -6,6 +6,6 @@
 
 @push('scripts')
     <script>
-        window.weatherResponse = @json($currentWeatherData);
+        window.currentMoodBarResponse = @json($currentMoodBarData);
     </script>
 @endpush

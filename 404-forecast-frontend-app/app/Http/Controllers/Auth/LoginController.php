@@ -15,7 +15,7 @@ class LoginController extends Controller
      *
      * @param LoginService $loginService
      */
-    public function __construct(private LoginService $loginService)
+    public function __construct(private readonly LoginService $loginService)
     {
     }
 

@@ -248,6 +248,7 @@
       <excludeFolder url="file://$MODULE_DIR$/404-forecast-not-found-api-app/vendor/vlucas/phpdotenv" />
       <excludeFolder url="file://$MODULE_DIR$/404-forecast-not-found-api-app/vendor/voku/portable-ascii" />
       <excludeFolder url="file://$MODULE_DIR$/404-forecast-not-found-api-app/vendor/webmozart/assert" />
+      <excludeFolder url="file://$MODULE_DIR$/404-forecast-not-found-api-app/vendor/halaxa/json-machine" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

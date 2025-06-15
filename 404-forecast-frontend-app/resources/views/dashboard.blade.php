@@ -14,7 +14,7 @@
 @endsection
 @push('scripts')
     <script>
-        window.weatherResponse = @json($currentWeatherData);
+        window.currentMoodBarResponse = @json($currentWeatherData);
         window.forecastResponse = @json($forecastWeatherData);
     </script>
     @vite('resources/js/index.js')

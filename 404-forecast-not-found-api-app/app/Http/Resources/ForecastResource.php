@@ -11,7 +11,7 @@ class ForecastResource extends JsonResource
     /**
      * Transform the forecast item into an array.
      *
-     * @param  Request  $request
+     * @param Request $request
      * @return array<string, mixed>
      */
     public function toArray($request): array
@@ -23,17 +23,18 @@ class ForecastResource extends JsonResource
                 ? Carbon::parse($data['dt_txt'])
                 : null,
             'temperature' => $data['main']['temp'] ?? null,
-            'feels_like'  => $data['main']['feels_like'] ?? null,
-            'pressure'    => $data['main']['pressure'] ?? null,
-            'humidity'    => $data['main']['humidity'] ?? null,
-            'wind'        => [
+            'feels_like' => $data['main']['feels_like'] ?? null,
+            'pressure' => $data['main']['pressure'] ?? null,
+            'humidity' => $data['main']['humidity'] ?? null,
+            'wind' => [
                 'speed' => $data['wind']['speed'] ?? null,
-                'deg'   => $data['wind']['deg'] ?? null,
+                'deg' => $data['wind']['deg'] ?? null,
             ],
-            'weather'     => [
-                'main'        => $data['weather'][0]['main'] ?? null,
+            'pop' => $data['pop'] ?? null,
+            'weather' => [
+                'main' => $data['weather'][0]['main'] ?? null,
                 'description' => $data['weather'][0]['description'] ?? null,
-                'icon'        => $data['weather'][0]['icon'] ?? null,
+                'icon' => $data['weather'][0]['icon'] ?? null,
             ],
         ];
     }

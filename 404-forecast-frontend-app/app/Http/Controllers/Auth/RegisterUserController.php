@@ -37,6 +37,7 @@ class RegisterUserController extends Controller
         $token = $result['access_token'];
         session(['auth_token' => $token]);
 
-        return redirect()->route('dashboard');
+        return redirect()->route('dashboard.dashboard')
+            ->with('success', 'Registration successful! Welcome to the dashboard.');
     }
 }

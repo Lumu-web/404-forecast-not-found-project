@@ -8,6 +8,7 @@ use App\Http\Requests\CityAutocompleteRequest;
 use App\Http\Requests\WeatherOverviewRequest;
 use App\Http\Resources\CurrentWeatherResource;
 use App\Http\Resources\ForecastResource;
+use App\Http\Resources\HourlyForecastResource;
 use App\Models\City;
 use App\Models\WeatherProvider;
 use App\Services\WeatherProviderFactory;
@@ -83,10 +84,8 @@ class WeatherController extends Controller
     /**
      * Guest overview: uses default lat/lon/city/country.
      */
-    public function getGuestWeatherOverview(): JsonResponse
+    public function getGuestSampleDataCurrentSnapshot(): JsonResponse
     {
-
-        // pull in our defaults
         ['lat'     => $lat,
             'lon'     => $lon,
             'city'    => $city,
@@ -100,13 +99,13 @@ class WeatherController extends Controller
         );
 
         try {
-            $overview = $this->weatherService->fetchWeatherOverview(
+            $guestSnapShotSampleData = $this->weatherService->fetchCurrentWeather(
                 $lat,
                 $lon,
                 $cityId
             );
 
-            return response()->json($overview);
+            return response()->json($guestSnapShotSampleData);
         } catch (\Exception $e) {
             return response()->json(
                 ['error' => $e->getMessage()],
@@ -127,7 +126,7 @@ class WeatherController extends Controller
             $request->input('lon')
         );
 
-        $overview = $this->weatherService->fetchWeatherOverview(
+        $overview = $this->weatherService->fetchGuestWeatherOverview(
             $lat,
             $lon,
             $request->input('city'),
@@ -135,6 +134,44 @@ class WeatherController extends Controller
         );
 
         return response()->json($overview);
+    }
+
+    public function getHourlyForecast(WeatherRequest $request): JsonResponse
+    {
+        [$cityId, $lat, $lon] = $this->resolveLocation(
+            $request->input('city_id'),
+            $request->input('city'),
+            $request->input('lat'),
+            $request->input('lon')
+        );
+
+        $response = $this->weatherService->fetchHourlyForecast(
+            $lat,
+            $lon,
+            $cityId
+        );
+
+        HourlyForecastResource::collection($response['list'])->response();
+        return response()->json($response);
+    }
+
+    public function getDailyForecast(WeatherRequest $request): JsonResponse
+    {
+        [$cityId, $lat, $lon] = $this->resolveLocation(
+            $request->input('city_id'),
+            $request->input('city'),
+            $request->input('lat'),
+            $request->input('lon')
+        );
+
+        $response = $this->weatherService->fetchDailyForecast(
+            $lat,
+            $lon,
+            $cityId
+        );
+        ForecastResource::collection($response['list'])->response();
+
+        return response()->json($response);
     }
 
     /**
