@@ -253,6 +253,7 @@
       <path value="$PROJECT_DIR$/404-forecast-not-found-api-app/vendor/laravel/sanctum" />
       <path value="$PROJECT_DIR$/404-forecast-frontend-app/vendor/laravel/sanctum" />
       <path value="$PROJECT_DIR$/404-forecast-frontend-app/vendor/laravel/breeze" />
+      <path value="$PROJECT_DIR$/404-forecast-not-found-api-app/vendor/halaxa/json-machine" />
     </include_path>
   </component>
   <component name="PhpProjectSharedConfiguration" php_language_level="8.2">

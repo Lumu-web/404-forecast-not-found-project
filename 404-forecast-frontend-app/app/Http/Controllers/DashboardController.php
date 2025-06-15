@@ -2,96 +2,65 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\CurrentWeatherService;
 use App\Services\ForecastService;
-use Illuminate\Contracts\View\View;
-use Illuminate\Foundation\Application;
-use Illuminate\Foundation\Mix;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
+use App\Services\HourlyForecastService;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class DashboardController extends Controller
 {
     public function __construct(
-        protected ForecastService $forecastService
-    ) {
-        if (!$this->forecastService) {
-            throw new \Exception('Forecast service is not available');
-        }
-    }
-    private function getDefaultWeatherData(): array
-    {
-        $weatherOverviewData = $this->forecastService->fetchWeatherOverviewData();
+        protected CurrentWeatherService $currentWeatherService,
+        protected ForecastService $forecastService,
+        protected HourlyForecastService $hourlyForecastService
+    ) {}
 
-        return [$weatherOverviewData['current'] ?? [], $weatherOverviewData['forecast'] ?? []];
-    }
-
-    public function dashboard(): mixed
+    /**
+     * Display the dashboard with all initial graph data.
+     *
+     * Loads current conditions, forecast overview,
+     * plus the three main bar charts: current mood,
+     * next-24h feels-like, and next-24h precipitation.
+     */
+    public function index(Request $request)
     {
         try {
-            $data = $this->getDefaultWeatherData();;
-            [$currentWeatherData, $forecastWeatherData] = $data;
-            $user = session('user');
-            return view('index', compact('currentWeatherData', 'forecastWeatherData', 'user'));
+            // 1. Default overview data (current + forecast)
+            [$currentMoodChartData, $next24FeelsLikeData] = $this->getDefaultWeatherData();
+
+            return view('dashboard.index', compact(
+                'currentMoodChartData',
+                'next24FeelsLikeData'
+            ));
+
         } catch (HttpException $e) {
             if ($e->getStatusCode() === 401) {
-                return redirect('/login')->withErrors('Please login to access weather data.');
+                return redirect()->route('login')
+                    ->withErrors('Please login to access weather data.');
             }
-            // Handle other errors (500 etc)
             return response()->view('errors.custom', ['message' => $e->getMessage()], $e->getStatusCode());
-        } catch (\Exception $e) {
-            // Generic error handling fallback
+
+        } catch (\Throwable $e) {
+            // Generic fallback
             return response()->view('errors.custom', ['message' => 'An unexpected error occurred.'], 500);
         }
     }
 
-    public function current(): View
+    /**
+     * Helper to load default weather overview data.
+     * Returns [currentData, forecastData].
+     */
+    private function getDefaultWeatherData(): array
     {
-        $currentWeatherData = $this->forecastService->fetchCurrentWeatherData();
-        return view('current', compact('currentWeatherData'));
-    }
+        $currentMoodChartData   = $this->currentWeatherService->fetchCurrentWeatherBarChartData();
+        $next24FeelsLikeTrend   = $this->hourlyForecastService->getFeelsLikeNext24();
 
-    public function forecast(): View
-    {
-        $forecastWeatherData = $this->forecastService->fetchWeatherForecastData();
-        return view('forecast', compact('forecastWeatherData'));
-    }
-
-    public function locations(Request $request): JsonResponse
-    {
-        $city = $request->input('city');
-
-        if (!$city) {
-            return response()->json(['error' => 'City is required'], 422);
-        }
-
-        $cityLocationsData = $this->forecastService->fetchCityLocationsData($city);
-
-        return response()->json([$cityLocationsData]);
-    }
-
-    public function cityCharts(Request $request): JsonResponse
-    {
-        $input = $request->all();
-        $lat = $input['lat'] ?? null;
-        $lon = $input['lon'] ?? null;
-        if (!$lat || !$lon) {
-            return response()->json(['error' => 'Lat/Lon is required'], 422);
-        }
-
-        $weatherOverviewData = $this->forecastService->fetchWeatherOverviewData($lat, $lon);
-        return response()->json([
-            'current' => $weatherOverviewData['current'],
-            'forecast' => $weatherOverviewData['forecast'],
-        ]);
-    }
-
-
-    public function historical(): View
-    {
-        $weatherData = $this->forecastService->fetchCurrentWeatherData();
-        return view('index', compact('weatherData'));
+        return [
+            'currentMoodChartData'   => $currentMoodChartData,
+            'next24FeelsLikeTrend'   => $next24FeelsLikeTrend,
+        ];
     }
 }

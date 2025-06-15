@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\CurrentWeatherService;
 use App\Services\ForecastService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -9,14 +10,13 @@ use Illuminate\Http\Request;
 class GuestController extends Controller
 {
     public function __construct(
-        private readonly ForecastService $forecastService
+        private readonly CurrentWeatherService $currentWeatherService
     ) {}
 
     public function index(): View
     {
-        $data = $this->forecastService->getGuestSampleData();
-        ['current' => $currentWeatherData, 'forecast' => $forecastWeatherData] = $data + ['current' => [], 'forecast' => []];
+        $currentMoodBarData = $this->currentWeatherService->getGuestCurrentSnapShotSampleData();
         $isGuest = true;
-        return view('guest', compact('currentWeatherData', 'forecastWeatherData', 'isGuest'));
+        return view('guest.index', compact('currentMoodBarData', 'isGuest'));
     }
 }

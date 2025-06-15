@@ -21,6 +21,7 @@ return new class extends Migration
             $table->integer('humidity');
             $table->float('wind_speed');
             $table->integer('wind_deg');
+            $table->float('pop');
             $table->string('weather_main');
             $table->string('weather_description');
             $table->string('weather_icon');

@@ -1,5 +1,6 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 import * as bootstrap from 'bootstrap';
+import twemoji from 'twemoji'
 import './namespace';
 import './controllers/weather';
 import axios from 'axios';
@@ -45,4 +46,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     initOverlayMap('map', 'latitude', 'longitude');
+    twemoji.parse(document.body, {
+        folder: 'svg',
+        ext:    '.svg'
+    });
 });

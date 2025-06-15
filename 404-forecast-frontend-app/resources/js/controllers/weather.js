@@ -38,51 +38,41 @@ forecast.controllers.weather = (function () {
             }
         };
 
-        constructor(currentCtx, forecastCtx) {
-            this.currentCtx  = currentCtx;
+        constructor(currentMoodBarChartCtx, forecastCtx) {
+            this.currentMoodBarChartCtx  = currentMoodBarChartCtx;
             this.forecastCtx = forecastCtx;
-            this.currentChart  = null;
+            this.currentMoodBarChart  = null;
             this.forecastChart = null;
         }
 
         init() {
-            if (this.currentCtx && window.weatherResponse) {
-                this.initCurrentChart(window.weatherResponse);
+            if (this.currentMoodBarChartCtx && window.currentMoodBarResponse) {
+                this.initCurrentMoodBarChart(window.currentMoodBarResponse);
             }
             if (this.forecastCtx && window.forecastResponse) {
                 // this.initForecastChart(window.forecastResponse);
             }
         }
 
-        initCurrentChart(raw) {
-            const payload = typeof raw === 'string' ? JSON.parse(raw) : raw;
-            const items   = Array.isArray(payload.list) ? payload.list : [payload];
+        initCurrentMoodBarChart(snap) {
 
-            // normalize fields
-            const snaps = items.map(d => ({
-                label: d.dt
-                    ? new Date(d.dt * 1000).toLocaleString()
-                    : (d.captured_at ?? ''),
-                temp:   Math.round(((d.temperature ?? d.main.temp)       - 273.15)),
-                feels:  Math.round(((d.feels_like  ?? d.main.feels_like) - 273.15)),
-                humid:  +(d.humidity ?? d.main.humidity),
-                pres:   +(d.pressure ?? d.main.pressure),
-            }));
+            const { name, label, temp, feels, humid, pres } = snap;
 
-            const labels     = snaps.map(s => s.label);
-            const tempsC     = snaps.map(s => s.temp);
-            const feelsC     = snaps.map(s => s.feels);
-            const humidities = snaps.map(s => s.humid);
-            const pressures  = snaps.map(s => s.pres);
+            const cityName         = [name];
+            const labels     = [label];
+            const tempsC     = [temp];
+            const feelsC     = [feels];
+            const humidities = [humid];
+            const pressures  = [pres];
 
             // destroy old chart
-            if (this.currentChart) {
-                this.currentChart.destroy();
-                this.currentChart = null;
+            if (this.currentMoodBarChart) {
+                this.currentMoodBarChart.destroy();
+                this.currentMoodBarChart = null;
             }
 
-            const ctx = this.currentCtx.getContext('2d');
-            this.currentChart = new Chart(ctx, {
+            const ctx = this.currentMoodBarChartCtx.getContext('2d');
+            this.currentMoodBarChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels,
@@ -120,7 +110,7 @@ forecast.controllers.weather = (function () {
                     plugins: {
                         title: {
                             display: true,
-                            text: `Current Weather: ${payload.name}`,
+                            text: `Current Weather: ${cityName}`,
                             font: { size: 18 }
                         },
                         datalabels: {
@@ -173,20 +163,20 @@ forecast.controllers.weather = (function () {
             });
         }
 
-        updateCurrentChart(snapshots) {
-            if (!this.currentChart) return;
+        updateCurrentMoodBarChart(snapshots) {
+            if (!this.currentMoodBarChart) return;
             const labels     = snapshots.map(s => s.captured_at);
             const tempsC     = snapshots.map(s => Math.round(s.temperature - 273.15));
             const feelsC     = snapshots.map(s => Math.round(s.feels_like - 273.15));
             const humidities = snapshots.map(s => s.humidity);
             const pressures  = snapshots.map(s => s.pressure);
 
-            this.currentChart.data.labels               = labels;
-            this.currentChart.data.datasets[0].data     = tempsC;
-            this.currentChart.data.datasets[1].data     = feelsC;
-            this.currentChart.data.datasets[2].data     = humidities;
-            this.currentChart.data.datasets[3].data     = pressures;
-            this.currentChart.update();
+            this.currentMoodBarChart.data.labels               = labels;
+            this.currentMoodBarChart.data.datasets[0].data     = tempsC;
+            this.currentMoodBarChart.data.datasets[1].data     = feelsC;
+            this.currentMoodBarChart.data.datasets[2].data     = humidities;
+            this.currentMoodBarChart.data.datasets[3].data     = pressures;
+            this.currentMoodBarChart.update();
         }
 
         updateForecastChart(data) {
@@ -201,9 +191,9 @@ forecast.controllers.weather = (function () {
         }
 
         destroy() {
-            if (this.currentChart) {
-                this.currentChart.destroy();
-                this.currentChart = null;
+            if (this.currentMoodBarChart) {
+                this.currentMoodBarChart.destroy();
+                this.currentMoodBarChart = null;
             }
             if (this.forecastChart) {
                 this.forecastChart.destroy();
@@ -314,7 +304,7 @@ forecast.controllers.weather = (function () {
                     if (data.current && data.forecast) {
                         window.weatherSnapshots    = data.currentSnapshots;
                         window.forecastResponse    = data.forecast;
-                        forecast.controllers.weather.updateCurrentChart(window.weatherSnapshots);
+                        forecast.controllers.weather.updateCurrentMoodBarChart(window.weatherSnapshots);
                         forecast.controllers.weather.updateForecastChart(data.forecast);
                     } else {
                         console.error('Unexpected API format', data);
@@ -330,12 +320,12 @@ forecast.controllers.weather = (function () {
     let weatherChartsInstance = null;
 
     function init() {
-        const currentCtx  = document.getElementById('currentChart');
+        const currentMoodBarChartCtx  = document.getElementById('current-mood-chart');
         const forecastCtx = document.getElementById('forecastChart');
 
         if (weatherChartsInstance) weatherChartsInstance.destroy();
 
-        weatherChartsInstance = new WeatherCharts(currentCtx, forecastCtx);
+        weatherChartsInstance = new WeatherCharts(currentMoodBarChartCtx, forecastCtx);
         weatherChartsInstance.init();
 
         setupCityAutocomplete();
@@ -343,7 +333,7 @@ forecast.controllers.weather = (function () {
 
     return {
         init,
-        updateCurrentChart:  (data) => weatherChartsInstance?.updateCurrentChart(data),
+        updateCurrentMoodBarChart:  (data) => weatherChartsInstance?.updateCurrentMoodBarChart(data),
         updateForecastChart: (data) => weatherChartsInstance?.updateForecastChart(data),
         destroy: () => weatherChartsInstance?.destroy()
     };

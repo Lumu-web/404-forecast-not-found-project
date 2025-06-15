@@ -1,18 +1,21 @@
 @extends('layouts.app')
+
 @section('content')
-    <div class="dashboard-container">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 p-4">
+        {{-- Current Conditions Mood Chart for Guests --}}
         <div class="chart-card">
-            @include('partials.current')
+            @include('dashboard.current-mood')
         </div>
+
+        {{-- Guest call-to-action (login/register) --}}
         <div class="chart-card">
-            @include('partials.forecast')
+            @include('partials._guest_cta')
         </div>
     </div>
-    @include('partials._guest_cta')
 @endsection
+
 @push('scripts')
     <script>
-        window.weatherResponse = @json($currentWeatherData);
-        window.forecastResponse = @json($forecastWeatherData);
+        window.currentMoodData = @json($currentMoodBarData);
     </script>
 @endpush

@@ -18,7 +18,7 @@ Route::prefix('v1')->group(function () {
 
         // Public or less-protected route
         Route::get('/locations', [WeatherController::class, 'getAutocompleteCity']);
-        Route::get('/guest-overview', [WeatherController::class, 'getGuestWeatherOverview']);
+        Route::get('/guest/current/snapshot/sample', [WeatherController::class, 'getGuestSampleDataCurrentSnapshot']);
     });
 });
 
